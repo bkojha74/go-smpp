@@ -102,6 +102,7 @@ type client struct {
 	// time of the last received EnquireLinkResp
 	eliTime time.Time
 	eliMtx  sync.RWMutex
+	chanMtx sync.RWMutex
 }
 
 func (c *client) init() {
@@ -126,7 +127,9 @@ func (c *client) Bind() {
 	const maxdelay = 120.0
 	for !c.closed() {
 		eli := make(chan struct{})
+		c.chanMtx.Lock()
 		c.inbox = make(chan pdu.Body)
+		c.chanMtx.Unlock()
 		conn, err := Dial(c.Addr, c.TLS)
 		if err != nil {
 			c.notify(&connStatus{
@@ -222,6 +225,8 @@ func (c *client) notify(ev ConnStatus) {
 
 // Read reads PDU binary data off the wire and returns it.
 func (c *client) Read() (pdu.Body, error) {
+	c.chanMtx.RLock()
+	defer c.chanMtx.RUnlock()
 	select {
 	case pdu := <-c.inbox:
 		return pdu, nil
